@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>StockTracker — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #07080d;
+    --surface: #0e1018;
+    --border: #1e2130;
+    --accent: #00ff88;
+    --accent2: #ff3d6e;
+    --accent3: #4da6ff;
+    --text: #e8eaf0;
+    --muted: #5a5f72;
+    --gain: #00ff88;
+    --loss: #ff3d6e;
+    --card: #10131e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow blob */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0,255,136,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    animation: blobmove 15s ease-in-out infinite alternate;
+  }
+
+  @keyframes blobmove {
+    from { transform: translate(0, 0); }
+    to { transform: translate(400px, 200px); }
+  }
+
+  /* ── SIDEBAR ─────────────────────────────────────── */
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 28px 0;
+    z-index: 100;
+  }
+
+  .logo {
+    padding: 0 24px 32px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-mark {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    color: var(--text);
+  }
+
+  .logo-mark span {
+    color: var(--accent);
+  }
+
+  .logo-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    margin-top: 4px;
+  }
+
+  .nav {
+    padding: 24px 0;
+    flex: 1;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 24px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 2px solid transparent;
+    letter-spacing: 0.5px;
+    position: relative;
+  }
+
+  .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.02); }
+
+  .nav-item.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    background: rgba(0,255,136,0.04);
+  }
+
+  .nav-icon {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-icon svg { width: 15px; height: 15px; }
+
+  .market-status {
+    margin: 0 16px;
+    padding: 12px 16px;
+    background: rgba(0,255,136,0.06);
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 8px;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,255,136,0.4); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(0,255,136,0); }
+  }
+
+  .status-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 1.5px;
+  }
+
+  .status-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 4px;
+    display: block;
+  }
+
+  /* ── MAIN LAYOUT ──────────────────────────────────── */
+  .main {
+    margin-left: 220px;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── TOP BAR ──────────────────────────────────────── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 36px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(7,8,13,0.8);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .page-title {
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .search-bar:focus-within { border-color: var(--accent); }
+
+  .search-bar input {
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 10px 16px;
+    width: 200px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .search-bar input::placeholder {
+    color: var(--muted);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .search-btn {
+    background: var(--accent);
+    border: none;
+    color: #000;
+    padding: 10px 18px;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: background 0.2s;
+  }
+
+  .search-btn:hover { background: #00cc6a; }
+
+  .user-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+  }
+
+  /* ── CONTENT ──────────────────────────────────────── */
+  .content {
+    padding: 32px 36px;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    grid-template-rows: auto auto auto;
+    gap: 24px;
+  }
+
+  /* ── STAT CARDS ───────────────────────────────────── */
+  .stats-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .stat-card:nth-child(1) { animation-delay: 0.05s; }
+  .stat-card:nth-child(2) { animation-delay: 0.1s; }
+  .stat-card:nth-child(3) { animation-delay: 0.15s; }
+  .stat-card:nth-child(4) { animation-delay: 0.2s; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+
+  .stat-card:nth-child(2)::before { background: linear-gradient(90deg, var(--accent3), transparent); }
+  .stat-card:nth-child(3)::before { background: linear-gradient(90deg, var(--gain), transparent); }
+  .stat-card:nth-child(4)::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+
+  .stat-meta {
+    margin-top: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+  }
+
+  .gain { color: var(--gain); }
+  .loss { color: var(--loss); }
+
+  /* ── CHART PANEL ──────────────────────────────────── */
+  .chart-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    animation: fadeUp 0.5s ease 0.25s both;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .panel-title {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .ticker-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(0,255,136,0.08);
+    border: 1px solid rgba(0,255,136,0.2);
+    padding: 4px 10px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+  }
+
+  .period-tabs {
+    display: flex;
+    gap: 4px;
+  }
+
+  .period-tab {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .period-tab.active, .period-tab:hover {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+
+  .chart-wrap {
+    height: 240px;
+    position: relative;
+  }
+
+  /* ── WATCHLIST PANEL ──────────────────────────────── */
+  .watchlist-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    animation: fadeUp 0.5s ease 0.3s both;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .add-stock-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    margin-bottom: 20px;
+  }
+
+  .add-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 8px 12px;
+    outline: none;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: border-color 0.2s;
+  }
+
+  .add-input::placeholder { text-transform: none; letter-spacing: 0; color: var(--muted); }
+  .add-input:focus { border-color: var(--accent); }
+
+  .add-btn {
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    color: #000;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .add-btn:hover { background: #00cc6a; }
+
+  .watchlist-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    max-height: 320px;
+    padding-right: 4px;
+  }
+
+  .watchlist-items::-webkit-scrollbar { width: 3px; }
+  .watchlist-items::-webkit-scrollbar-track { background: transparent; }
+  .watchlist-items::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .stock-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stock-row::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    transform: scaleY(0);
+    transition: transform 0.2s;
+    border-radius: 2px;
+  }
+
+  .stock-row:hover { border-color: rgba(0,255,136,0.2); }
+  .stock-row:hover::before { transform: scaleY(1); }
+
+  .stock-row.selected { border-color: rgba(0,255,136,0.3); background: rgba(0,255,136,0.04); }
+  .stock-row.selected::before { transform: scaleY(1); }
+
+  .stock-left { display: flex; flex-direction: column; gap: 3px; }
+
+  .stock-ticker {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 0.5px;
+  }
+
+  .stock-name {
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .stock-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+
+  .stock-price {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .stock-change {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .stock-change.gain { background: rgba(0,255,136,0.1); color: var(--gain); }
+  .stock-change.loss { background: rgba(255,61,110,0.1); color: var(--loss); }
+
+  .remove-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px;
+    opacity: 0;
+    transition: all 0.2s;
+    margin-left: 8px;
+  }
+
+  .stock-row:hover .remove-btn { opacity: 1; color: var(--loss); }
+
+  /* ── PORTFOLIO TABLE ──────────────────────────────── */
+  .portfolio-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    animation: fadeUp 0.5s ease 0.35s both;
+  }
+
+  .add-portfolio-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .add-portfolio-form input {
+    flex: 1;
+    min-width: 80px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .add-portfolio-form input:focus { border-color: var(--accent); }
+  .add-portfolio-form input::placeholder { color: var(--muted); font-size: 11px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 12px 10px;
+    border-bottom: 1px solid rgba(30,33,48,0.5);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  tr:hover td { background: rgba(255,255,255,0.01); }
+
+  .ticker-cell {
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 0.5px;
+  }
+
+  .del-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    transition: color 0.2s;
+    opacity: 0;
+  }
+
+  tr:hover .del-btn { opacity: 1; }
+  .del-btn:hover { color: var(--loss); }
+
+  /* ── TICKER TAPE ──────────────────────────────────── */
+  .ticker-tape {
+    grid-column: 1 / -1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 0;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .tape-track {
+    display: flex;
+    gap: 0;
+    animation: tape 30s linear infinite;
+    width: max-content;
+  }
+
+  @keyframes tape {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .tape-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 28px;
+    border-right: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .tape-sym {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 1px;
+  }
+
+  .tape-price {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .tape-chg {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--border) 0%, rgba(255,255,255,0.04) 50%, var(--border) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+  }
+
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .sidebar { transform: translateX(-100%); }
+    .main { margin-left: 0; }
+    .content { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">STOCK<span>X</span></div>
+    <div class="logo-sub">MARKET TRACKER</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-item active">
+      <span class="nav-icon">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="1" y="1" width="6" height="6" rx="1"/>
+          <rect x="9" y="1" width="6" height="6" rx="1"/>
+          <rect x="1" y="9" width="6" height="6" rx="1"/>
+          <rect x="9" y="9" width="6" height="6" rx="1"/>
+        </svg>
+      </span>
+      Dashboard
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <polyline points="1,12 5,7 8,9 12,4 15,6"/>
+        </svg>
+      </span>
+      Portfolio
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="8" r="7"/>
+          <line x1="8" y1="4" x2="8" y2="8"/>
+          <line x1="8" y1="8" x2="11" y2="10"/>
+        </svg>
+      </span>
+      Watchlist
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <line x1="8" y1="1" x2="8" y2="15"/>
+          <line x1="1" y1="8" x2="15" y2="8"/>
+        </svg>
+      </span>
+      Alerts
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="5" r="3"/>
+          <path d="M2 14c0-3 2.5-5 6-5s6 2 6 5"/>
+        </svg>
+      </span>
+      Account
+    </div>
+  </nav>
+  <div class="market-status">
+    <span class="status-dot"></span>
+    <span class="status-label">MARKET OPEN</span>
+    <span class="status-time" id="market-time">Loading...</span>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+  <div class="topbar">
+    <div class="page-title">Dashboard</div>
+    <div class="search-bar">
+      <input type="text" id="search-input" placeholder="Search ticker (e.g. AAPL)" maxlength="10"/>
+      <button class="search-btn" onclick="addToWatchlist()">TRACK</button>
+    </div>
+    <div class="user-chip">
+      <div class="avatar">JD</div>
+      <span>John Doe</span>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- Ticker Tape -->
+    <div class="ticker-tape">
+      <div class="tape-track" id="tape-track">
+        <!-- Duplicated for loop -->
+      </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Portfolio Value</div>
+        <div class="stat-value" id="total-value">$0.00</div>
+        <div class="stat-meta gain" id="total-gain">-- --</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Day Change</div>
+        <div class="stat-value" id="day-change">--</div>
+        <div class="stat-meta" id="day-label" style="color:var(--muted)">Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Positions</div>
+        <div class="stat-value" id="position-count">0</div>
+        <div class="stat-meta" style="color:var(--muted)">Active holdings</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Watchlist</div>
+        <div class="stat-value" id="watch-count">0</div>
+        <div class="stat-meta" style="color:var(--muted)">Tracked stocks</div>
+      </div>
+    </div>
+
+    <!-- Chart Panel -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title" id="chart-title">Select a stock</div>
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);margin-top:4px;" id="chart-price"></div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <span class="ticker-badge" id="chart-ticker">--</span>
+          <div class="period-tabs">
+            <button class="period-tab active" onclick="changePeriod('1d',this)">1D</button>
+            <button class="period-tab" onclick="changePeriod('5d',this)">5D</button>
+            <button class="period-tab" onclick="changePeriod('1mo',this)">1M</button>
+            <button class="period-tab" onclick="changePeriod('6mo',this)">6M</button>
+            <button class="period-tab" onclick="changePeriod('1y',this)">1Y</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="stockChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Watchlist Panel -->
+    <div class="watchlist-panel">
+      <div class="panel-header">
+        <div class="panel-title">Watchlist</div>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)" id="watch-updated">--</span>
+      </div>
+      <div class="add-stock-form">
+        <input class="add-input" type="text" id="wl-input" placeholder="Enter ticker..." maxlength="10"/>
+        <button class="add-btn" onclick="addToWatchlist()">+ ADD</button>
+      </div>
+      <div class="watchlist-items" id="watchlist-items">
+        <div style="color:var(--muted);font-size:12px;text-align:center;padding:20px;font-family:'DM Mono',monospace;">
+          No stocks tracked yet.
+        </div>
+      </div>
+    </div>
+
+    <!-- Portfolio Panel -->
+    <div class="portfolio-panel">
+      <div class="panel-header">
+        <div class="panel-title">Portfolio</div>
+      </div>
+      <div class="add-portfolio-form">
+        <input type="text" id="p-ticker" placeholder="Ticker" maxlength="8" style="max-width:90px;text-transform:uppercase"/>
+        <input type="number" id="p-shares" placeholder="Shares" min="0.001" step="0.001"/>
+        <input type="number" id="p-price" placeholder="Buy price" min="0.01" step="0.01"/>
+        <button class="add-btn" onclick="addToPortfolio()">Add</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Shares</th>
+            <th>Buy</th>
+            <th>Current</th>
+            <th>Value</th>
+            <th>Gain</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="portfolio-body">
+          <tr>
+            <td colspan="7" style="text-align:center;color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;padding:20px">
+              No positions yet.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// ── STATE ────────────────────────────────────────────────────────────
+let watchlist = JSON.parse(localStorage.getItem('watchlist') || '[]');
+let portfolio = JSON.parse(localStorage.getItem('portfolio') || '[]');
+let selectedTicker = null;
+let currentPeriod = '1d';
+let stockChart = null;
+let prices = {};
+
+// ── CHART SETUP ──────────────────────────────────────────────────────
+const ctx = document.getElementById('stockChart').getContext('2d');
+
+function buildChart(labels, data, isGain) {
+  if (stockChart) stockChart.destroy();
+
+  const grad = ctx.createLinearGradient(0, 0, 0, 240);
+  grad.addColorStop(0, isGain ? 'rgba(0,255,136,0.2)' : 'rgba(255,61,110,0.2)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+  stockChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: isGain ? '#00ff88' : '#ff3d6e',
+        borderWidth: 2,
+        fill: true,
+        backgroundColor: grad,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: isGain ? '#00ff88' : '#ff3d6e',
+        pointHoverBorderColor: '#07080d',
+        pointHoverBorderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0e1018',
+          borderColor: '#1e2130',
+          borderWidth: 1,
+          titleColor: '#5a5f72',
+          bodyColor: '#e8eaf0',
+          titleFont: { family: 'DM Mono', size: 10 },
+          bodyFont: { family: 'DM Mono', size: 13 },
+          padding: 10,
+          callbacks: {
+            label: ctx => ' $' + ctx.parsed.y.toFixed(2)
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(30,33,48,0.5)', drawBorder: false },
+          ticks: { color: '#5a5f72', font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 8 }
+        },
+        y: {
+          grid: { color: 'rgba(30,33,48,0.5)', drawBorder: false },
+          ticks: { color: '#5a5f72', font: { family: 'DM Mono', size: 9 }, callback: v => '$' + v.toFixed(0) },
+          position: 'right'
+        }
+      }
+    }
+  });
+}
+
+// ── DEMO DATA GENERATOR ──────────────────────────────────────────────
+// In production these would be real API calls to your Flask backend:
+// fetch(`/api/quote/${ticker}`) and fetch(`/api/history/${ticker}?period=${period}`)
+
+const demoStocks = {
+  'AAPL': { name: 'Apple Inc.', price: 189.45, change: 2.34, pct: 1.25 },
+  'TSLA': { name: 'Tesla Inc.', price: 242.80, change: -5.12, pct: -2.07 },
+  'MSFT': { name: 'Microsoft Corp.', price: 378.91, change: 4.55, pct: 1.22 },
+  'GOOGL': { name: 'Alphabet Inc.', price: 142.56, change: -1.23, pct: -0.86 },
+  'NVDA': { name: 'NVIDIA Corp.', price: 495.22, change: 18.67, pct: 3.92 },
+  'AMZN': { name: 'Amazon.com Inc.', price: 178.35, change: 3.41, pct: 1.95 },
+  'META': { name: 'Meta Platforms', price: 311.48, change: -2.87, pct: -0.91 },
+  'SPY':  { name: 'S&P 500 ETF', price: 452.10, change: 1.78, pct: 0.40 }
+};
+
+function getStockData(ticker) {
+  return demoStocks[ticker.toUpperCase()] || {
+    name: ticker.toUpperCase(),
+    price: 100 + Math.random() * 400,
+    change: (Math.random() - 0.5) * 20,
+    pct: (Math.random() - 0.5) * 6
+  };
+}
+
+function generateHistory(basePrice, points) {
+  const data = [];
+  let p = basePrice * 0.85;
+  for (let i = 0; i < points; i++) {
+    p = Math.max(1, p + (Math.random() - 0.48) * p * 0.02);
+    data.push(parseFloat(p.toFixed(2)));
+  }
+  data[data.length - 1] = basePrice;
+  return data;
+}
+
+function generateLabels(period) {
+  const labels = [];
+  const now = new Date();
+  let count, unit;
+  if (period === '1d') { count = 78; unit = 'min'; }
+  else if (period === '5d') { count = 50; unit = 'day'; }
+  else if (period === '1mo') { count = 30; unit = 'day'; }
+  else if (period === '6mo') { count = 26; unit = 'week'; }
+  else { count = 52; unit = 'week'; }
+
+  for (let i = count; i >= 0; i--) {
+    const d = new Date(now);
+    if (unit === 'min') { d.setMinutes(d.getMinutes() - i * 5); labels.push(d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0')); }
+    else if (unit === 'day') { d.setDate(d.getDate() - i); labels.push((d.getMonth()+1) + '/' + d.getDate()); }
+    else { d.setDate(d.getDate() - i * 7); labels.push((d.getMonth()+1) + '/' + d.getDate()); }
+  }
+  return labels;
+}
+
+// ── LOAD CHART ────────────────────────────────────────────────────────
+function loadChart(ticker, period) {
+  const stock = getStockData(ticker);
+  const pointMap = { '1d': 78, '5d': 50, '1mo': 30, '6mo': 26, '1y': 52 };
+  const pts = pointMap[period] || 78;
+  const labels = generateLabels(period);
+  const data = generateHistory(stock.price, pts + 1);
+  const isGain = stock.change >= 0;
+
+  document.getElementById('chart-title').textContent = stock.name;
+  document.getElementById('chart-ticker').textContent = ticker.toUpperCase();
+  document.getElementById('chart-price').textContent =
+    '$' + stock.price.toFixed(2) + '  ' + (isGain ? '+' : '') + stock.change.toFixed(2) + ' (' + (isGain ? '+' : '') + stock.pct.toFixed(2) + '%)';
+  document.getElementById('chart-price').style.color = isGain ? 'var(--gain)' : 'var(--loss)';
+
+  buildChart(labels, data, isGain);
+}
+
+function changePeriod(period, btn) {
+  document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentPeriod = period;
+  if (selectedTicker) loadChart(selectedTicker, period);
+}
+
+// ── WATCHLIST ─────────────────────────────────────────────────────────
+function saveWatchlist() { localStorage.setItem('watchlist', JSON.stringify(watchlist)); }
+
+function addToWatchlist() {
+  const raw = (document.getElementById('search-input').value || document.getElementById('wl-input').value).trim().toUpperCase();
+  if (!raw || watchlist.find(w => w.ticker === raw)) {
+    document.getElementById('wl-input').style.borderColor = 'var(--loss)';
+    setTimeout(() => document.getElementById('wl-input').style.borderColor = '', 1000);
+    return;
+  }
+
+  const stock = getStockData(raw);
+  prices[raw] = stock.price;
+  watchlist.push({ ticker: raw, name: stock.name, price: stock.price, change: stock.change, pct: stock.pct });
+  saveWatchlist();
+  renderWatchlist();
+  updateStats();
+
+  document.getElementById('search-input').value = '';
+  document.getElementById('wl-input').value = '';
+
+  if (!selectedTicker) {
+    selectedTicker = raw;
+    loadChart(raw, currentPeriod);
+  }
+}
+
+function removeFromWatchlist(ticker) {
+  watchlist = watchlist.filter(w => w.ticker !== ticker);
+  saveWatchlist();
+  renderWatchlist();
+  updateStats();
+  if (selectedTicker === ticker) {
+    selectedTicker = watchlist.length ? watchlist[0].ticker : null;
+    if (selectedTicker) loadChart(selectedTicker, currentPeriod);
+  }
+}
+
+function selectStock(ticker) {
+  selectedTicker = ticker;
+  document.querySelectorAll('.stock-row').forEach(r => r.classList.remove('selected'));
+  document.getElementById('row-' + ticker)?.classList.add('selected');
+  loadChart(ticker, currentPeriod);
+}
+
+function renderWatchlist() {
+  const container = document.getElementById('watchlist-items');
+  document.getElementById('watch-count').textContent = watchlist.length;
+
+  if (!watchlist.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px;font-family:DM Mono,monospace">No stocks tracked yet.</div>';
+    return;
+  }
+
+  container.innerHTML = watchlist.map(item => {
+    const isGain = item.change >= 0;
+    return `
+      <div class="stock-row ${selectedTicker === item.ticker ? 'selected' : ''}"
+           id="row-${item.ticker}" onclick="selectStock('${item.ticker}')">
+        <div class="stock-left">
+          <span class="stock-ticker">${item.ticker}</span>
+          <span class="stock-name">${item.name}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <div class="stock-right">
+            <span class="stock-price">$${item.price.toFixed(2)}</span>
+            <span class="stock-change ${isGain ? 'gain' : 'loss'}">${isGain ? '+' : ''}${item.pct.toFixed(2)}%</span>
+          </div>
+          <button class="remove-btn" onclick="event.stopPropagation();removeFromWatchlist('${item.ticker}')" title="Remove">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const now = new Date();
+  document.getElementById('watch-updated').textContent = 'Updated ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+}
+
+// ── PORTFOLIO ─────────────────────────────────────────────────────────
+function savePortfolio() { localStorage.setItem('portfolio', JSON.stringify(portfolio)); }
+
+function addToPortfolio() {
+  const ticker = document.getElementById('p-ticker').value.trim().toUpperCase();
+  const shares = parseFloat(document.getElementById('p-shares').value);
+  const buyPrice = parseFloat(document.getElementById('p-price').value);
+
+  if (!ticker || isNaN(shares) || isNaN(buyPrice) || shares <= 0 || buyPrice <= 0) return;
+
+  const stock = getStockData(ticker);
+  portfolio.push({ ticker, shares, buyPrice, currentPrice: stock.price, name: stock.name });
+  savePortfolio();
+  renderPortfolio();
+  updateStats();
+
+  document.getElementById('p-ticker').value = '';
+  document.getElementById('p-shares').value = '';
+  document.getElementById('p-price').value = '';
+}
+
+function removeFromPortfolio(idx) {
+  portfolio.splice(idx, 1);
+  savePortfolio();
+  renderPortfolio();
+  updateStats();
+}
+
+function renderPortfolio() {
+  const body = document.getElementById('portfolio-body');
+  document.getElementById('position-count').textContent = portfolio.length;
+
+  if (!portfolio.length) {
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);font-family:DM Mono,monospace;font-size:11px;padding:20px">No positions yet.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = portfolio.map((item, i) => {
+    const gain = (item.currentPrice - item.buyPrice) * item.shares;
+    const gainPct = ((item.currentPrice - item.buyPrice) / item.buyPrice) * 100;
+    const isGain = gain >= 0;
+    return `
+      <tr>
+        <td class="ticker-cell">${item.ticker}</td>
+        <td>${item.shares}</td>
+        <td>$${item.buyPrice.toFixed(2)}</td>
+        <td>$${item.currentPrice.toFixed(2)}</td>
+        <td>$${(item.currentPrice * item.shares).toFixed(2)}</td>
+        <td class="${isGain ? 'gain' : 'loss'}">${isGain ? '+' : ''}$${gain.toFixed(2)}<br>
+          <span style="font-size:10px">${isGain ? '+' : ''}${gainPct.toFixed(2)}%</span>
+        </td>
+        <td><button class="del-btn" onclick="removeFromPortfolio(${i})">x</button></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ── STATS ─────────────────────────────────────────────────────────────
+function updateStats() {
+  let totalValue = 0, totalGain = 0;
+  portfolio.forEach(item => {
+    totalValue += item.currentPrice * item.shares;
+    totalGain += (item.currentPrice - item.buyPrice) * item.shares;
+  });
+
+  document.getElementById('total-value').textContent = '$' + totalValue.toFixed(2);
+  const gainEl = document.getElementById('total-gain');
+  gainEl.textContent = (totalGain >= 0 ? '+' : '') + '$' + totalGain.toFixed(2) + ' all time';
+  gainEl.className = 'stat-meta ' + (totalGain >= 0 ? 'gain' : 'loss');
+
+  const dayChg = watchlist.reduce((a, w) => a + w.change, 0);
+  const dayEl = document.getElementById('day-change');
+  dayEl.textContent = (dayChg >= 0 ? '+' : '') + '$' + dayChg.toFixed(2);
+  dayEl.style.color = dayChg >= 0 ? 'var(--gain)' : 'var(--loss)';
+}
+
+// ── TICKER TAPE ────────────────────────────────────────────────────────
+function buildTickerTape() {
+  const tapeData = [
+    { sym: 'AAPL', price: 189.45, chg: '+1.25%', gain: true },
+    { sym: 'TSLA', price: 242.80, chg: '-2.07%', gain: false },
+    { sym: 'MSFT', price: 378.91, chg: '+1.22%', gain: true },
+    { sym: 'NVDA', price: 495.22, chg: '+3.92%', gain: true },
+    { sym: 'GOOGL', price: 142.56, chg: '-0.86%', gain: false },
+    { sym: 'AMZN', price: 178.35, chg: '+1.95%', gain: true },
+    { sym: 'META', price: 311.48, chg: '-0.91%', gain: false },
+    { sym: 'SPY',  price: 452.10, chg: '+0.40%', gain: true },
+    { sym: 'QQQ',  price: 379.55, chg: '+0.88%', gain: true },
+    { sym: 'BRK',  price: 541.20, chg: '-0.12%', gain: false },
+  ];
+
+  const html = [...tapeData, ...tapeData].map(item => `
+    <div class="tape-item">
+      <span class="tape-sym">${item.sym}</span>
+      <span class="tape-price">$${item.price}</span>
+      <span class="tape-chg" style="color:${item.gain ? 'var(--gain)' : 'var(--loss)'}">${item.chg}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('tape-track').innerHTML = html;
+}
+
+// ── CLOCK ─────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const est = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const h = est.getHours(), m = est.getMinutes();
+  const isOpen = h >= 9 && (h < 16 || (h === 16 && m === 0)) && est.getDay() > 0 && est.getDay() < 6;
+  const timeStr = est.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  document.querySelector('.status-time').textContent = timeStr + ' EST';
+  document.querySelector('.status-label').textContent = isOpen ? 'MARKET OPEN' : 'MARKET CLOSED';
+  document.querySelector('.status-dot').style.background = isOpen ? 'var(--gain)' : 'var(--loss)';
+}
+
+// ── KEYBOARD SHORTCUT ─────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const si = document.getElementById('search-input');
+    const wi = document.getElementById('wl-input');
+    if (document.activeElement === si || document.activeElement === wi) addToWatchlist();
+  }
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────
+(function init() {
+  buildTickerTape();
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  if (watchlist.length) {
+    renderWatchlist();
+    selectedTicker = watchlist[0].ticker;
+    loadChart(selectedTicker, currentPeriod);
+  } else {
+    // Load a default stock
+    const defaultStock = getStockData('AAPL');
+    watchlist = [{ ticker: 'AAPL', ...defaultStock }];
+    renderWatchlist();
+    selectedTicker = 'AAPL';
+    loadChart('AAPL', currentPeriod);
+  }
+
+  if (portfolio.length) renderPortfolio();
+  updateStats();
+})();
+</script>
+</body>
+</html>
